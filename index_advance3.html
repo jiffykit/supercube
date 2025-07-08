@@ -1,0 +1,2389 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>3D Math Visualizer - Advanced Educational Features</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: Arial;
+            transition: all 0.3s ease;
+        }
+
+        /* Dark mode (default) */
+        :root {
+            --bg-color: #111;
+            --text-color: white;
+            --panel-bg: rgba(0, 0, 0, 0.9);
+            --panel-border: #444;
+            --button-bg: #333;
+            --button-hover: #444;
+            --button-border: #555;
+        }
+
+        /* Light mode */
+        body.light-mode {
+            --bg-color: #f0f0f0;
+            --text-color: #333;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --panel-border: #ccc;
+            --button-bg: #e0e0e0;
+            --button-hover: #d0d0d0;
+            --button-border: #999;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 450px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--panel-border);
+        }
+
+        #input {
+            padding: 8px;
+            font-size: 16px;
+            width: 300px;
+            margin-bottom: 10px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--button-border);
+            border-radius: 4px;
+        }
+
+        #examples {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            margin-top: 10px;
+            color: var(--text-color);
+            font-size: 13px;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .example {
+            cursor: pointer;
+            color: #4da6ff;
+            text-decoration: underline;
+            margin-right: 10px;
+        }
+
+        .example:hover {
+            color: #66b3ff;
+        }
+
+        #help {
+            font-size: 11px;
+            color: #888;
+            margin-top: 8px;
+            border-top: 1px solid var(--panel-border);
+            padding-top: 8px;
+        }
+
+        .control-button {
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--button-border);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 5px;
+            margin-right: 5px;
+        }
+
+        .control-button:hover {
+            background: var(--button-hover);
+        }
+
+        #animationControls {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--panel-border);
+        }
+
+        .speed-control {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <input type="text" id="input" placeholder="Enter expression like 3^4= or sqrt(16)= or 7/3 or 10-3=" />
+        <div id="examples">
+            Examples:
+            <span class="example" onclick="setExpression('2+3=')">2+3=</span>
+            <span class="example" onclick="setExpression('10-3=')">10-3=</span>
+            <span class="example" onclick="setExpression('3^4=')">3⁴=</span>
+            <span class="example" onclick="setExpression('sqrt(16)=')">√16=</span>
+            <span class="example" onclick="setExpression('12=')">12=</span>
+            <span class="example" onclick="setExpression('15=')">15=</span>
+        </div>
+        <div id="status">Ready - Advanced visualization with exponentials, roots, fractions, animations, and light mode
+        </div>
+        <div id="help">
+            🖱️ Drag to rotate • 🖱️ Wheel to zoom • 📱 Pinch to zoom • 🖱️ Middle-drag to pan • ⬅️➡️ Arrow keys or
+            Ctrl+Wheel to cycle arrangements
+            <button class="control-button" onclick="resetCameraView()">Reset View</button>
+            <button class="control-button" onclick="toggleLightMode()">🌞 Light Mode</button>
+        </div>
+        <div id="animationControls">
+            Animation Speed:
+            <button class="control-button speed-control" onclick="setAnimationSpeed(0.5)">Slow</button>
+            <button class="control-button speed-control" onclick="setAnimationSpeed(1)">Normal</button>
+            <button class="control-button speed-control" onclick="setAnimationSpeed(2)">Fast</button>
+            <button class="control-button" onclick="skipAnimation()">Skip Animation</button>
+        </div>
+    </div>
+    <div id="canvas"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Global animation settings
+        let animationSpeed = 1;
+        let skipAnimations = false;
+
+        // Enhanced Math Parser with expression decomposition
+        class AdvancedMathParser {
+            constructor() {
+                this.operators = {
+                    '+': { prec: 1, assoc: 'left', func: (a, b) => a + b, type: 'addition' },
+                    '-': { prec: 1, assoc: 'left', func: (a, b) => a - b, type: 'subtraction' },
+                    '*': { prec: 2, assoc: 'left', func: (a, b) => a * b, type: 'multiplication' },
+                    '/': { prec: 2, assoc: 'left', func: (a, b) => a / b, type: 'division' },
+                    '^': { prec: 3, assoc: 'right', func: (a, b) => Math.pow(a, b), type: 'exponentiation' },
+                    '**': { prec: 3, assoc: 'right', func: (a, b) => Math.pow(a, b), type: 'exponentiation' },
+                };
+
+                this.functions = {
+                    'sqrt': { func: x => Math.sqrt(x), type: 'square_root', inverse: x => x * x },
+                    'cbrt': { func: x => Math.cbrt(x), type: 'cube_root', inverse: x => x * x * x },
+                    'abs': { func: x => Math.abs(x), type: 'absolute' },
+                    'sin': { func: x => Math.sin(x), type: 'trigonometric' },
+                    'cos': { func: x => Math.cos(x), type: 'trigonometric' },
+                    'tan': { func: x => Math.tan(x), type: 'trigonometric' },
+                    'log': { func: x => Math.log10(x), type: 'logarithmic' },
+                    'ln': { func: x => Math.log(x), type: 'logarithmic' },
+                    'exp': { func: x => Math.exp(x), type: 'exponential' },
+                    'floor': { func: x => Math.floor(x), type: 'rounding' },
+                    'ceil': { func: x => Math.ceil(x), type: 'rounding' },
+                    'round': { func: x => Math.round(x), type: 'rounding' },
+                };
+            }
+
+            // Enhanced tokenizer that preserves expression structure
+            tokenize(expression) {
+                expression = expression.replace(/\s/g, '');
+                expression = expression.replace(/\*\*/g, '^');
+
+                const tokens = [];
+                let i = 0;
+
+                while (i < expression.length) {
+                    if (/[\d.]/.test(expression[i])) {
+                        let num = '';
+                        while (i < expression.length && /[\d.]/.test(expression[i])) {
+                            num += expression[i];
+                            i++;
+                        }
+                        tokens.push({ type: 'number', value: parseFloat(num) });
+                        continue;
+                    }
+
+                    if (/[a-zA-Z]/.test(expression[i])) {
+                        let funcName = '';
+                        while (i < expression.length && /[a-zA-Z]/.test(expression[i])) {
+                            funcName += expression[i];
+                            i++;
+                        }
+                        if (this.functions[funcName]) {
+                            tokens.push({
+                                type: 'function',
+                                value: funcName,
+                                funcType: this.functions[funcName].type
+                            });
+                        } else {
+                            throw new Error(`Unknown function: ${funcName}`);
+                        }
+                        continue;
+                    }
+
+                    if ('+-*/^'.includes(expression[i])) {
+                        if (expression[i] === '-' &&
+                            (tokens.length === 0 ||
+                                ['operator', 'left_paren'].includes(tokens[tokens.length - 1].type))) {
+                            tokens.push({ type: 'number', value: 0 });
+                            tokens.push({
+                                type: 'operator',
+                                value: '-',
+                                opType: 'subtraction'
+                            });
+                        } else {
+                            tokens.push({
+                                type: 'operator',
+                                value: expression[i],
+                                opType: this.operators[expression[i]].type
+                            });
+                        }
+                        i++;
+                        continue;
+                    }
+
+                    if (expression[i] === '(') {
+                        tokens.push({ type: 'left_paren', value: '(' });
+                        i++;
+                        continue;
+                    }
+
+                    if (expression[i] === ')') {
+                        tokens.push({ type: 'right_paren', value: ')' });
+                        i++;
+                        continue;
+                    }
+
+                    if (expression[i] === '=') {
+                        tokens.push({ type: 'equals', value: '=' });
+                        i++;
+                        continue;
+                    }
+
+                    i++;
+                }
+
+                return tokens;
+            }
+
+            // Parse with animation steps tracking
+            parseWithSteps(expression) {
+                const tokens = this.tokenize(expression);
+                const hasEquals = tokens.some(t => t.type === 'equals');
+
+                // Remove equals sign for calculation
+                const calcTokens = tokens.filter(t => t.type !== 'equals');
+
+                // Count multiplication operators to determine target dimension
+                const multiplicationCount = calcTokens.filter(t =>
+                    t.type === 'operator' && t.value === '*'
+                ).length;
+
+                // Extract exact multiplication factors from the original expression
+                const exactFactors = this.extractMultiplicationFactors(calcTokens);
+
+                const postfix = this.infixToPostfix(calcTokens);
+                const result = this.evaluatePostfix(postfix);
+
+                // Analyze expression for visualization steps
+                const steps = this.analyzeExpressionSteps(tokens, result);
+
+                return {
+                    result,
+                    steps,
+                    hasAnimation: hasEquals,
+                    tokens: calcTokens,
+                    originalExpression: expression,
+                    targetDimension: multiplicationCount > 0 ? multiplicationCount + 1 : null,  // +1 because n operators = n+1 dimensions
+                    multiplicationCount: multiplicationCount,
+                    exactFactors: exactFactors  // Add exact factors from the expression
+                };
+            }
+
+            analyzeExpressionSteps(tokens, finalResult) {
+                const steps = [];
+
+                // Look for specific patterns
+                const hasRoot = tokens.some(t => t.type === 'function' &&
+                    ['square_root', 'cube_root'].includes(t.funcType));
+                const hasDivision = tokens.some(t => t.type === 'operator' && t.opType === 'division');
+                const hasSubtraction = tokens.some(t => t.type === 'operator' && t.opType === 'subtraction');
+                const hasExponentiation = tokens.some(t => t.type === 'operator' && t.opType === 'exponentiation');
+                const hasAddition = tokens.some(t => t.type === 'operator' && t.opType === 'addition');
+
+                // For complex expressions like (2^9)+2, handle the exponential part first
+                if (hasExponentiation) {
+                    const base = this.findExponentialBase(tokens);
+                    const exponent = this.findExponentialExponent(tokens);
+                    const exponentialResult = Math.pow(base, exponent);
+
+                    steps.push({
+                        type: 'exponential_buildup',
+                        base: base,
+                        exponent: exponent,
+                        finalResult: exponentialResult
+                    });
+
+                    // If there's addition after exponentiation, handle it
+                    if (hasAddition) {
+                        const additionalValue = this.findAdditionalValue(tokens, exponentialResult, finalResult);
+                        if (additionalValue > 0) {
+                            steps.push({
+                                type: 'addition_visualization',
+                                mainValue: exponentialResult,
+                                additionalValue: additionalValue,
+                                finalResult: finalResult
+                            });
+                        }
+                    }
+                } else if (hasAddition && !hasExponentiation) {
+                    // Handle simple addition like 2+3
+                    const addends = this.extractAddends(tokens);
+                    steps.push({
+                        type: 'simple_addition',
+                        addends: addends,
+                        finalResult: finalResult
+                    });
+                }
+
+                if (hasRoot) {
+                    const rootToken = tokens.find(t => t.type === 'function' &&
+                        ['square_root', 'cube_root'].includes(t.funcType));
+                    steps.push({
+                        type: 'root_transformation',
+                        rootType: rootToken.funcType,
+                        function: rootToken.value
+                    });
+                }
+
+                if (hasDivision) {
+                    steps.push({ type: 'division_visualization' });
+                }
+
+                if (hasSubtraction && !hasAddition && !hasExponentiation) {
+                    // Handle simple subtraction
+                    const subtractTerms = this.extractSubtractionTerms(tokens);
+                    steps.push({
+                        type: 'simple_subtraction',
+                        terms: subtractTerms,
+                        finalResult: finalResult
+                    });
+                }
+
+                steps.push({ type: 'final_compaction', result: finalResult });
+
+                return steps;
+            }
+
+            findExponentialBase(tokens) {
+                // Find the base number before the exponentiation operator
+                for (let i = 0; i < tokens.length - 1; i++) {
+                    if (tokens[i].type === 'number' &&
+                        tokens[i + 1].type === 'operator' &&
+                        tokens[i + 1].opType === 'exponentiation') {
+                        return tokens[i].value;
+                    }
+                }
+                return 2; // Default base
+            }
+
+            findExponentialExponent(tokens) {
+                // Find the exponent number after the exponentiation operator
+                for (let i = 1; i < tokens.length; i++) {
+                    if (tokens[i - 1].type === 'operator' &&
+                        tokens[i - 1].opType === 'exponentiation' &&
+                        tokens[i].type === 'number') {
+                        return tokens[i].value;
+                    }
+                }
+                return 2; // Default exponent
+            }
+
+            findAdditionalValue(tokens, exponentialResult, finalResult) {
+                // Calculate the additional value by subtracting the exponential result from final result
+                // This handles cases like (2^9)+2 where exponentialResult=512 and finalResult=514, so additional=2
+                return finalResult - exponentialResult;
+            }
+
+            extractAddends(tokens) {
+                // Extract numbers from simple addition like 2+3
+                const addends = [];
+                for (let i = 0; i < tokens.length; i++) {
+                    if (tokens[i].type === 'number') {
+                        addends.push(tokens[i].value);
+                    }
+                }
+                return addends;
+            }
+
+            extractSubtractionTerms(tokens) {
+                // Extract terms from subtraction like 10-3
+                const terms = [];
+                let currentSign = 1;
+
+                for (let i = 0; i < tokens.length; i++) {
+                    if (tokens[i].type === 'number') {
+                        terms.push({ value: tokens[i].value, sign: currentSign });
+                        currentSign = 1; // Reset to positive for next term
+                    } else if (tokens[i].type === 'operator' && tokens[i].opType === 'subtraction') {
+                        currentSign = -1;
+                    }
+                }
+                return terms;
+            }
+
+            // Extract exact multiplication factors from a simple multiplication expression
+            extractMultiplicationFactors(tokens) {
+                // Only extract factors if this is a simple multiplication expression (no other operations)
+                const hasNonMultiplication = tokens.some(t =>
+                    t.type === 'operator' && t.value !== '*'
+                );
+
+                if (hasNonMultiplication) {
+                    return null; // Not a simple multiplication, use normal factorizations
+                }
+
+                // Extract all number tokens in order
+                const factors = [];
+                for (const token of tokens) {
+                    if (token.type === 'number') {
+                        factors.push(Math.round(token.value)); // Round to handle any floating point issues
+                    }
+                }
+
+                // Only return if we have multiple factors (at least one multiplication)
+                return factors.length > 1 ? factors : null;
+            }
+
+            infixToPostfix(tokens) {
+                const output = [];
+                const operatorStack = [];
+
+                for (const token of tokens) {
+                    if (token.type === 'number') {
+                        output.push(token);
+                    } else if (token.type === 'function') {
+                        operatorStack.push(token);
+                    } else if (token.type === 'operator') {
+                        while (operatorStack.length > 0 &&
+                            operatorStack[operatorStack.length - 1].type !== 'left_paren' &&
+                            (operatorStack[operatorStack.length - 1].type === 'function' ||
+                                (operatorStack[operatorStack.length - 1].type === 'operator' &&
+                                    ((this.operators[operatorStack[operatorStack.length - 1].value].prec > this.operators[token.value].prec) ||
+                                        (this.operators[operatorStack[operatorStack.length - 1].value].prec === this.operators[token.value].prec &&
+                                            this.operators[token.value].assoc === 'left'))))) {
+                            output.push(operatorStack.pop());
+                        }
+                        operatorStack.push(token);
+                    } else if (token.type === 'left_paren') {
+                        operatorStack.push(token);
+                    } else if (token.type === 'right_paren') {
+                        while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1].type !== 'left_paren') {
+                            output.push(operatorStack.pop());
+                        }
+                        if (operatorStack.length === 0) {
+                            throw new Error('Mismatched parentheses');
+                        }
+                        operatorStack.pop();
+
+                        if (operatorStack.length > 0 && operatorStack[operatorStack.length - 1].type === 'function') {
+                            output.push(operatorStack.pop());
+                        }
+                    }
+                }
+
+                while (operatorStack.length > 0) {
+                    if (['left_paren', 'right_paren'].includes(operatorStack[operatorStack.length - 1].type)) {
+                        throw new Error('Mismatched parentheses');
+                    }
+                    output.push(operatorStack.pop());
+                }
+
+                return output;
+            }
+
+            evaluatePostfix(postfixTokens) {
+                const stack = [];
+
+                for (const token of postfixTokens) {
+                    if (token.type === 'number') {
+                        stack.push(token.value);
+                    } else if (token.type === 'operator') {
+                        if (stack.length < 2) {
+                            throw new Error('Invalid expression');
+                        }
+                        const b = stack.pop();
+                        const a = stack.pop();
+                        const result = this.operators[token.value].func(a, b);
+                        stack.push(result);
+                    } else if (token.type === 'function') {
+                        if (stack.length < 1) {
+                            throw new Error('Invalid expression');
+                        }
+                        const a = stack.pop();
+                        const result = this.functions[token.value].func(a);
+                        stack.push(result);
+                    }
+                }
+
+                if (stack.length !== 1) {
+                    throw new Error('Invalid expression');
+                }
+
+                return stack[0];
+            }
+
+            // Special number pattern detection
+            getSpecialNumberPatterns(n) {
+                const patterns = [];
+
+                // Skip square numbers here - they'll be handled as standard arrangements
+                const squareRoot = Math.sqrt(n);
+                const isSquare = Math.abs(squareRoot - Math.round(squareRoot)) < 0.001;
+
+                // Triangular numbers: T(k) = k(k+1)/2 (but not if it's also a perfect square)
+                const triangularIndex = Math.round((-1 + Math.sqrt(1 + 8 * n)) / 2);
+                if (triangularIndex * (triangularIndex + 1) / 2 === n && !isSquare) {
+                    patterns.push({ type: 'triangular', index: triangularIndex });
+                }
+
+                // Pentagonal numbers: P(k) = k(3k-1)/2 (but not if it's also a perfect square)
+                for (let k = 1; k <= Math.sqrt(n); k++) {
+                    if (k * (3 * k - 1) / 2 === n && !isSquare) {
+                        patterns.push({ type: 'pentagonal', index: k });
+                        break;
+                    }
+                }
+
+                // Hexagonal numbers: H(k) = k(2k-1) (but not if it's also a perfect square)
+                for (let k = 1; k <= Math.sqrt(n / 2); k++) {
+                    if (k * (2 * k - 1) === n && !isSquare) {
+                        patterns.push({ type: 'hexagonal', index: k });
+                        break;
+                    }
+                }
+
+                return patterns;
+            }
+
+            // Get all possible factorizations for a number, ordered by most obvious/proper first
+            getAllFactorizations(n) {
+                if (n <= 0) return [];
+                if (n === 1) return [[1]];
+
+                const factorizations = [];
+
+                // Generate higher-dimensional factorizations first (4D, 5D, 6D)
+                this.generateHighDimensionalFactorizations(n, factorizations);
+
+                // 3D arrangements
+                for (let x = 2; x <= Math.cbrt(n) + 1; x++) {
+                    if (n % x === 0) {
+                        const remaining = n / x;
+                        for (let y = x; y <= Math.sqrt(remaining) + 1; y++) {
+                            if (remaining % y === 0) {
+                                const z = remaining / y;
+                                if (z >= y) { // Keep sorted order
+                                    const arrangement = [x, y, z];
+                                    if (!factorizations.some(f => f.join(',') === arrangement.join(','))) {
+                                        factorizations.push(arrangement);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2D arrangements (including perfect squares)
+                for (let x = 2; x <= Math.sqrt(n); x++) {
+                    if (n % x === 0) {
+                        const y = n / x;
+                        if (y >= x) { // Keep sorted order
+                            const arrangement = [x, y];
+                            if (!factorizations.some(f => f.join(',') === arrangement.join(','))) {
+                                factorizations.push(arrangement);
+                            }
+                        }
+                    }
+                }
+
+                // 1D arrangement
+                if (!factorizations.some(f => f.join(',') === [n].join(','))) {
+                    factorizations.push([n]);
+                }
+
+                // Sort by preference: prioritize higher dimensions first (based on total number of factors)
+                return factorizations.sort((a, b) => {
+                    // Dimensions = number of factors in the array
+                    const aDimensions = a.length;
+                    const bDimensions = b.length;
+
+                    // Primary sort: Higher dimensions ALWAYS come first
+                    if (aDimensions !== bDimensions) {
+                        return bDimensions - aDimensions; // Higher dimensions first
+                    }
+
+                    // Secondary sort: Within same dimension, prefer hypercubes (all factors equal)
+                    const aIsUniform = a.length > 0 && a.every(f => f === a[0]);
+                    const bIsUniform = b.length > 0 && b.every(f => f === b[0]);
+
+                    if (aIsUniform && !bIsUniform) return -1;
+                    if (!aIsUniform && bIsUniform) return 1;
+
+                    // Tertiary sort: Within same dimension and hypercube status, prefer larger factor
+                    if (aIsUniform && bIsUniform) {
+                        return Math.max(...b) - Math.max(...a);
+                    }
+
+                    // Quaternary sort: For non-hypercubes, prefer more uniform distributions (lower variance)
+                    if (a.length > 1 && b.length > 1) {
+                        const aMean = a.reduce((s, f) => s + f, 0) / a.length;
+                        const bMean = b.reduce((s, f) => s + f, 0) / b.length;
+                        const aVariance = a.reduce((s, f) => s + (f - aMean) ** 2, 0) / a.length;
+                        const bVariance = b.reduce((s, f) => s + (f - bMean) ** 2, 0) / b.length;
+
+                        if (Math.abs(aVariance - bVariance) > 0.001) {
+                            return aVariance - bVariance; // Lower variance first (more uniform)
+                        }
+                    }
+
+                    // Final sort: By largest factor
+                    const aMax = a.length > 0 ? Math.max(...a) : 1;
+                    const bMax = b.length > 0 ? Math.max(...b) : 1;
+                    return bMax - aMax;
+                });
+            }
+
+            generateHighDimensionalFactorizations(n, factorizations) {
+                // Generate factorizations for all possible dimensions (no performance limits)
+                // Continue until we find the highest possible dimension
+                console.log(`generateHighDimensionalFactorizations(${n})`);
+                let dimension = 4;
+                let foundFactorizations = false;
+
+                // Keep increasing dimension until we find no more factorizations
+                do {
+                    const initialCount = factorizations.length;
+                    console.log(`  Trying dimension ${dimension}, current count: ${initialCount}`);
+                    this.generateFactorizationsForDimension(n, dimension, factorizations);
+                    foundFactorizations = (factorizations.length > initialCount);
+                    console.log(`  After dimension ${dimension}, count: ${factorizations.length}, found: ${foundFactorizations}`);
+                    dimension++;
+                } while (foundFactorizations && dimension <= 20); // Safety limit at 20D to prevent infinite loops
+                console.log(`Final factorizations count: ${factorizations.length}`);
+            }
+
+            generateFactorizationsForDimension(n, dimension, factorizations) {
+                const factors = [];
+                this.findFactorizations(n, dimension, factors, factorizations, 2);
+            }
+
+            findFactorizations(remaining, dimensionsLeft, currentFactors, factorizations, minFactor) {
+                // Base case: last dimension
+                if (dimensionsLeft === 1) {
+                    if (remaining >= minFactor) {
+                        const arrangement = [...currentFactors, remaining];
+                        const key = arrangement.join(',');
+                        if (!factorizations.some(f => f.join(',') === key)) {
+                            console.log(`    Found: [${arrangement.join(',')}]`);
+                            factorizations.push(arrangement);
+                        }
+                    }
+                    return;
+                }
+
+                // Calculate the maximum first factor for this dimension
+                const maxFactor = Math.floor(Math.pow(remaining, 1 / dimensionsLeft)) + 1;
+
+                // Try each possible factor
+                for (let factor = minFactor; factor <= maxFactor; factor++) {
+                    if (remaining % factor === 0) {
+                        const newRemaining = remaining / factor;
+                        const newFactors = [...currentFactors, factor];
+
+                        // Recursive call for remaining dimensions
+                        this.findFactorizations(
+                            newRemaining,
+                            dimensionsLeft - 1,
+                            newFactors,
+                            factorizations,
+                            factor  // Maintain sorted order by using current factor as minimum
+                        );
+                    }
+                }
+            }
+        }
+
+        // Enhanced 3D Visualizer with advanced features
+        class AdvancedVisualizer {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.updateRendererForTheme();
+                document.getElementById('canvas').appendChild(this.renderer.domElement);
+
+                this.camera.position.set(10, 10, 10);
+                this.camera.lookAt(0, 0, 0);
+
+                this.setupControls();
+                this.setupLighting();
+
+                this.parser = new AdvancedMathParser();
+                this.currentVisualization = null;
+                this.animationQueue = [];
+                this.isAnimating = false;
+                this.currentArrangements = [];
+                this.currentArrangementIndex = 0;
+                this.currentNumber = 0;
+
+                this.setupInputHandlers();
+                this.animate();
+
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                    this.controls.update();
+                });
+
+                // Add mouse wheel event for cycling arrangements (when Ctrl is held)
+                this.renderer.domElement.addEventListener('wheel', (event) => {
+                    if (event.ctrlKey && this.currentArrangements.length > 1) {
+                        event.preventDefault();
+                        this.cycleArrangement(event.deltaY > 0 ? 1 : -1);
+                    }
+                });
+
+                // Add arrow key controls for cycling arrangements
+                document.addEventListener('keydown', (event) => {
+                    if (this.currentArrangements.length > 1) {
+                        if (event.key === 'ArrowLeft') {
+                            event.preventDefault();
+                            this.cycleArrangement(-1);
+                        } else if (event.key === 'ArrowRight') {
+                            event.preventDefault();
+                            this.cycleArrangement(1);
+                        }
+                    }
+                });
+            }
+
+            setupControls() {
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.screenSpacePanning = false;
+                this.controls.minDistance = 2;
+                this.controls.maxDistance = 100;
+                this.controls.enablePan = true;
+                this.controls.enableZoom = true;
+                this.controls.enableRotate = true;
+            }
+
+            setupLighting() {
+                // Clear existing lights
+                this.scene.children = this.scene.children.filter(child => child.type !== 'AmbientLight' && child.type !== 'DirectionalLight');
+
+                this.updateLighting();
+            }
+
+            updateLighting() {
+                // Remove old lights
+                const lightsToRemove = [];
+                this.scene.traverse((child) => {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(light => this.scene.remove(light));
+
+                // Add appropriate lighting for current theme
+                const isLightMode = document.body.classList.contains('light-mode');
+
+                if (isLightMode) {
+                    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+                    this.scene.add(ambientLight);
+
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+                    directionalLight.position.set(10, 10, 5);
+                    this.scene.add(directionalLight);
+                } else {
+                    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                    this.scene.add(ambientLight);
+
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(10, 10, 5);
+                    this.scene.add(directionalLight);
+                }
+            }
+
+            updateRendererForTheme() {
+                const isLightMode = document.body.classList.contains('light-mode');
+                this.renderer.setClearColor(isLightMode ? 0xf0f0f0 : 0x111111);
+            }
+
+            setupInputHandlers() {
+                const input = document.getElementById('input');
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.processInput(input.value);
+                    }
+                });
+
+                input.addEventListener('input', () => {
+                    if (input.value.trim()) {
+                        try {
+                            const parseResult = this.parser.parseWithSteps(input.value);
+                            this.updateStatus(`Expression evaluates to: ${parseResult.result.toFixed(3)}`);
+                        } catch (error) {
+                            this.updateStatus(`Error: ${error.message}`);
+                        }
+                    }
+                });
+            }
+
+            updateStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
+
+            async processInput(expression) {
+                try {
+                    this.clearScene();
+                    const parseResult = this.parser.parseWithSteps(expression);
+
+                    let statusMessage = `${expression} = ${parseResult.result.toFixed(3)}`;
+                    if (parseResult.targetDimension !== null) {
+                        statusMessage += ` (Prioritizing ${parseResult.targetDimension}D based on ${parseResult.targetDimension - 1} multiplication operators)`;
+                    }
+                    statusMessage += ' (Creating visualization...)';
+
+                    this.updateStatus(statusMessage);
+
+                    if (parseResult.hasAnimation && !skipAnimations) {
+                        await this.createAnimatedVisualization(parseResult);
+                    } else {
+                        await this.createEnhancedVisualization(parseResult.result, parseResult.targetDimension, parseResult.exactFactors);
+                    }
+
+                } catch (error) {
+                    this.updateStatus(`Error: ${error.message}`);
+                }
+            }
+
+            async createAnimatedVisualization(parseResult) {
+                const { steps, result, originalExpression } = parseResult;
+
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+
+                    if (skipAnimations) break;
+
+                    switch (step.type) {
+                        case 'exponential_buildup':
+                            await this.animateExponentialBuildup(step);
+                            break;
+                        case 'addition_visualization':
+                            await this.animateAdditionVisualization(step);
+                            break;
+                        case 'simple_addition':
+                            await this.animateSimpleAddition(step);
+                            break;
+                        case 'simple_subtraction':
+                            await this.animateSimpleSubtraction(step);
+                            break;
+                        case 'root_transformation':
+                            await this.animateRootTransformation(step, result);
+                            break;
+                        case 'division_visualization':
+                            await this.animateDivisionVisualization(result);
+                            break;
+                        case 'subtraction_visualization':
+                            await this.animateSubtractionVisualization(result);
+                            break;
+                        case 'final_compaction':
+                            await this.animateFinalCompaction(result);
+                            break;
+                    }
+                }
+
+                this.updateStatus(`Animation complete: ${originalExpression} = ${result.toFixed(3)}`);
+            }
+
+            async animateExponentialBuildup(step) {
+                const { base, exponent, finalResult } = step;
+
+                // Build the progression string
+                let progressionStr = "1";
+                for (let i = 1; i <= exponent; i++) {
+                    progressionStr += ` → ${Math.pow(base, i)}`;
+                }
+
+                this.updateStatus(`Building ${base}^${exponent} step by step: ${progressionStr}`);
+
+                // Start with 1 (single cube)
+                let currentValue = 1;
+                let currentCubes = [];
+
+                // Create initial single cube for value 1
+                const initialCube = this.createCube({ x: 0, y: 0, z: 0 }, 0xffffff); // White for starting value 1
+                this.scene.add(initialCube);
+                currentCubes.push(initialCube);
+
+                this.updateStatus(`Step 0: Starting with 1`);
+                this.fitCameraToScene();
+
+                if (!skipAnimations) {
+                    await this.delay(1200 / animationSpeed);
+                }
+
+                // Build up exponentially: 1 → base → base² → base³ → ...
+                for (let power = 1; power <= exponent; power++) {
+                    const newValue = Math.pow(base, power);
+
+                    this.updateStatus(`Step ${power}: ${currentValue} × ${base} = ${newValue}`);
+
+                    // Remove all current cubes from scene (we'll create new arrangement)
+                    currentCubes.forEach(cube => this.scene.remove(cube));
+                    currentCubes = [];
+
+                    // Create new cubes for the current value
+                    const color = this.getExponentialColor(power);
+
+                    if (newValue <= 64) { // Show individual cubes for reasonable numbers
+                        // Create optimal 3D arrangement for current value
+                        const factors = this.findBest3DFactorization(newValue);
+                        const [dimX, dimY, dimZ] = factors || [newValue, 1, 1];
+
+                        const gap = 0.1;
+                        const cubeSize = 0.8;
+                        const offsetX = -(dimX - 1) * (cubeSize + gap) / 2;
+                        const offsetY = -(dimY - 1) * (cubeSize + gap) / 2;
+                        const offsetZ = -(dimZ - 1) * (cubeSize + gap) / 2;
+
+                        let cubeIndex = 0;
+                        for (let x = 0; x < dimX && cubeIndex < newValue; x++) {
+                            for (let y = 0; y < dimY && cubeIndex < newValue; y++) {
+                                for (let z = 0; z < dimZ && cubeIndex < newValue; z++) {
+                                    const cube = this.createCube({
+                                        x: offsetX + x * (cubeSize + gap),
+                                        y: offsetY + y * (cubeSize + gap),
+                                        z: offsetZ + z * (cubeSize + gap)
+                                    }, color);
+
+                                    this.scene.add(cube);
+                                    currentCubes.push(cube);
+                                    cubeIndex++;
+
+                                    if (!skipAnimations) {
+                                        await this.delay(50 / animationSpeed);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // For large numbers, create a representative arrangement
+                        const representativeCubes = Math.min(27, newValue); // Max 3x3x3 cube
+                        const factors = this.findBest3DFactorization(representativeCubes);
+                        const [dimX, dimY, dimZ] = factors || [3, 3, 3];
+
+                        const gap = 0.1;
+                        const cubeSize = 0.8;
+                        const offsetX = -(dimX - 1) * (cubeSize + gap) / 2;
+                        const offsetY = -(dimY - 1) * (cubeSize + gap) / 2;
+                        const offsetZ = -(dimZ - 1) * (cubeSize + gap) / 2;
+
+                        let cubeIndex = 0;
+                        for (let x = 0; x < dimX && cubeIndex < representativeCubes; x++) {
+                            for (let y = 0; y < dimY && cubeIndex < representativeCubes; y++) {
+                                for (let z = 0; z < dimZ && cubeIndex < representativeCubes; z++) {
+                                    const cube = this.createCube({
+                                        x: offsetX + x * (cubeSize + gap),
+                                        y: offsetY + y * (cubeSize + gap),
+                                        z: offsetZ + z * (cubeSize + gap)
+                                    }, color);
+
+                                    this.scene.add(cube);
+                                    currentCubes.push(cube);
+                                    cubeIndex++;
+
+                                    if (!skipAnimations) {
+                                        await this.delay(30 / animationSpeed);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    currentValue = newValue;
+                    this.fitCameraToScene();
+
+                    if (!skipAnimations) {
+                        await this.delay(1000 / animationSpeed);
+                    }
+                }
+
+                this.updateStatus(`Exponential buildup complete: ${base}^${exponent} = ${finalResult.toFixed(0)}`);
+            }
+
+            getExponentialColor(power) {
+                // Use different colors for different powers, starting with white for 1
+                const colors = [
+                    0xffffff, // White for 1 (base^0)
+                    0x00ff00, // Green for base^1
+                    0x0080ff, // Blue for base^2  
+                    0xff8000, // Orange for base^3
+                    0xff0080, // Pink for base^4
+                    0x8000ff, // Purple for base^5
+                    0xff4000, // Red-orange for base^6
+                    0x00ff80, // Teal for base^7
+                    0xff0040  // Red-pink for base^8
+                ];
+
+                return colors[Math.min(power, colors.length - 1)] || 0xffffff;
+            }
+
+            async compactCubesArrangement(cubes, targetNumber) {
+                // Find best 3D arrangement for current number of cubes
+                const factors = this.findBest3DFactorization(cubes.length);
+
+                if (!factors || cubes.length <= 8) return; // Don't compact small arrangements
+
+                const [dimX, dimY, dimZ] = factors;
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                const offsetX = -(dimX - 1) * (cubeSize + gap) / 2;
+                const offsetY = -(dimY - 1) * (cubeSize + gap) / 2;
+                const offsetZ = -(dimZ - 1) * (cubeSize + gap) / 2;
+
+                // Animate cubes to their new positions
+                let cubeIndex = 0;
+                for (let x = 0; x < dimX && cubeIndex < cubes.length; x++) {
+                    for (let y = 0; y < dimY && cubeIndex < cubes.length; y++) {
+                        for (let z = 0; z < dimZ && cubeIndex < cubes.length; z++) {
+                            const cube = cubes[cubeIndex];
+                            const targetPos = {
+                                x: offsetX + x * (cubeSize + gap),
+                                y: offsetY + y * (cubeSize + gap),
+                                z: offsetZ + z * (cubeSize + gap)
+                            };
+
+                            // Animate smooth movement to new position
+                            await this.animateCubeMovement(cube, targetPos);
+                            cubeIndex++;
+
+                            if (!skipAnimations) {
+                                await this.delay(30 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+            }
+
+            async animateCubeMovement(cube, targetPosition) {
+                return new Promise((resolve) => {
+                    const startPos = cube.position.clone();
+                    const distance = startPos.distanceTo(new THREE.Vector3(targetPosition.x, targetPosition.y, targetPosition.z));
+                    const duration = Math.min(500, distance * 100); // Proportional to distance
+                    const startTime = Date.now();
+
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+
+                        // Smooth easing function
+                        const ease = 1 - Math.pow(1 - progress, 3);
+
+                        cube.position.lerpVectors(startPos, new THREE.Vector3(targetPosition.x, targetPosition.y, targetPosition.z), ease);
+
+                        if (progress >= 1) {
+                            resolve();
+                        } else {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+
+                    animate();
+                });
+            }
+
+            async animateRootTransformation(step, result) {
+                const rootType = step.rootType;
+                const originalValue = this.parser.functions[step.function].inverse(result);
+
+                this.updateStatus(`Showing ${step.function}(${originalValue}) transformation...`);
+
+                // Create the original shape (square for sqrt, cube for cbrt)
+                if (rootType === 'square_root') {
+                    const sideLength = Math.sqrt(originalValue);
+                    await this.createSquareAndShrinkToLine(sideLength, result);
+                } else if (rootType === 'cube_root') {
+                    const sideLength = Math.cbrt(originalValue);
+                    await this.createCubeAndShrinkToLine(sideLength, result);
+                }
+            }
+
+            async createSquareAndShrinkToLine(sideLength, finalLength) {
+                const roundedSide = Math.round(sideLength);
+
+                // Create initial square
+                for (let x = 0; x < roundedSide; x++) {
+                    for (let y = 0; y < roundedSide; y++) {
+                        const cube = this.createCube(
+                            { x: x - roundedSide / 2, y: y - roundedSide / 2, z: 0 },
+                            0x4a9eff
+                        );
+                        this.scene.add(cube);
+
+                        if (!skipAnimations) {
+                            await this.delay(50 / animationSpeed);
+                        }
+                    }
+                }
+
+                this.fitCameraToScene();
+
+                if (!skipAnimations) {
+                    await this.delay(1000 / animationSpeed);
+                }
+
+                // Shrink to line
+                const cubesInScene = [];
+                this.scene.traverse((child) => {
+                    if (child.isMesh && child.geometry.type === 'BoxGeometry') {
+                        cubesInScene.push(child);
+                    }
+                });
+
+                // Remove rows to get to linear arrangement
+                const finalCount = Math.round(finalLength);
+                let removed = 0;
+
+                for (let y = roundedSide - 1; y >= 0 && cubesInScene.length - removed > finalCount; y--) {
+                    for (let x = 0; x < roundedSide && cubesInScene.length - removed > finalCount; x++) {
+                        const cubeToRemove = cubesInScene.find(cube =>
+                            Math.abs(cube.position.y - (y - roundedSide / 2)) < 0.1 &&
+                            Math.abs(cube.position.x - (x - roundedSide / 2)) < 0.1
+                        );
+
+                        if (cubeToRemove) {
+                            this.animateGhostCube(cubeToRemove);
+                            removed++;
+
+                            if (!skipAnimations) {
+                                await this.delay(100 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+
+                this.fitCameraToScene();
+            }
+
+            async createCubeAndShrinkToLine(sideLength, finalLength) {
+                const roundedSide = Math.round(sideLength);
+
+                // Create initial cube
+                for (let x = 0; x < roundedSide; x++) {
+                    for (let y = 0; y < roundedSide; y++) {
+                        for (let z = 0; z < roundedSide; z++) {
+                            const cube = this.createCube(
+                                { x: x - roundedSide / 2, y: y - roundedSide / 2, z: z - roundedSide / 2 },
+                                0x42ff8c
+                            );
+                            this.scene.add(cube);
+
+                            if (!skipAnimations) {
+                                await this.delay(30 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+
+                this.fitCameraToScene();
+
+                if (!skipAnimations) {
+                    await this.delay(1000 / animationSpeed);
+                }
+
+                // Shrink to line by removing dimensions
+                await this.shrinkCubeToLine(roundedSide, Math.round(finalLength));
+
+                this.fitCameraToScene();
+            }
+
+            async shrinkCubeToLine(originalSide, finalLength) {
+                const cubesInScene = [];
+                this.scene.traverse((child) => {
+                    if (child.isMesh && child.geometry.type === 'BoxGeometry') {
+                        cubesInScene.push(child);
+                    }
+                });
+
+                // Remove Z dimension first
+                for (let z = originalSide - 1; z > 0; z--) {
+                    for (let x = 0; x < originalSide; x++) {
+                        for (let y = 0; y < originalSide; y++) {
+                            const cubeToRemove = cubesInScene.find(cube =>
+                                Math.abs(cube.position.z - (z - originalSide / 2)) < 0.1 &&
+                                Math.abs(cube.position.x - (x - originalSide / 2)) < 0.1 &&
+                                Math.abs(cube.position.y - (y - originalSide / 2)) < 0.1
+                            );
+
+                            if (cubeToRemove) {
+                                this.animateGhostCube(cubeToRemove);
+
+                                if (!skipAnimations) {
+                                    await this.delay(50 / animationSpeed);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Remove Y dimension
+                for (let y = originalSide - 1; y > 0; y--) {
+                    for (let x = 0; x < originalSide; x++) {
+                        const cubeToRemove = cubesInScene.find(cube =>
+                            Math.abs(cube.position.z) < 0.1 &&
+                            Math.abs(cube.position.x - (x - originalSide / 2)) < 0.1 &&
+                            Math.abs(cube.position.y - (y - originalSide / 2)) < 0.1 &&
+                            cube.parent === this.scene
+                        );
+
+                        if (cubeToRemove) {
+                            this.animateGhostCube(cubeToRemove);
+
+                            if (!skipAnimations) {
+                                await this.delay(80 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+
+                // Finally, adjust X dimension to final length
+                const remainingCubes = [];
+                this.scene.traverse((child) => {
+                    if (child.isMesh && child.geometry.type === 'BoxGeometry' && child.parent === this.scene) {
+                        remainingCubes.push(child);
+                    }
+                });
+
+                if (remainingCubes.length > finalLength) {
+                    for (let i = finalLength; i < remainingCubes.length; i++) {
+                        if (remainingCubes[i]) {
+                            this.animateGhostCube(remainingCubes[i]);
+
+                            if (!skipAnimations) {
+                                await this.delay(100 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+            }
+
+            animateGhostCube(cube) {
+                // Make cube glow and fade out
+                cube.material = cube.material.clone();
+                cube.material.transparent = true;
+                cube.material.opacity = 0.3;
+                cube.material.emissive = new THREE.Color(0x444444);
+
+                // Add subtle glow effect
+                const glowGeometry = cube.geometry.clone();
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.1,
+                    side: THREE.BackSide
+                });
+
+                glowGeometry.scale(1.1, 1.1, 1.1);
+                const glowCube = new THREE.Mesh(glowGeometry, glowMaterial);
+                glowCube.position.copy(cube.position);
+                this.scene.add(glowCube);
+
+                // Animate fade out
+                const fadeOut = () => {
+                    cube.material.opacity -= 0.05;
+                    glowCube.material.opacity -= 0.01;
+
+                    if (cube.material.opacity <= 0) {
+                        this.scene.remove(cube);
+                        this.scene.remove(glowCube);
+                    } else {
+                        requestAnimationFrame(fadeOut);
+                    }
+                };
+
+                setTimeout(fadeOut, 200);
+            }
+
+            async animateDivisionVisualization(result) {
+                this.updateStatus("Showing division with fractions and remainders...");
+
+                const wholePart = Math.floor(result);
+                const fractionalPart = result - wholePart;
+
+                // Create whole cubes
+                for (let i = 0; i < wholePart; i++) {
+                    const cube = this.createCube(
+                        { x: i - wholePart / 2, y: 0, z: 0 },
+                        0x42ff8c
+                    );
+                    this.scene.add(cube);
+
+                    if (!skipAnimations) {
+                        await this.delay(200 / animationSpeed);
+                    }
+                }
+
+                // Create fractional cube if there's a remainder
+                if (fractionalPart > 0.001) {
+                    const fractionalCube = this.createFractionalCube(
+                        { x: wholePart - wholePart / 2, y: 0, z: 0 },
+                        fractionalPart
+                    );
+                    this.scene.add(fractionalCube);
+                }
+
+                this.fitCameraToScene();
+            }
+
+            createFractionalCube(position, fraction) {
+                const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+
+                // Create brighter material for fractions
+                const material = new THREE.MeshLambertMaterial({
+                    color: 0xffff00,  // Bright yellow for fractions
+                    transparent: true,
+                    opacity: 0.6 + (fraction * 0.4)  // More opaque for larger fractions
+                });
+
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(position.x, position.y, position.z);
+
+                // Add bright wireframe
+                const edges = new THREE.EdgesGeometry(geometry);
+                const wireframe = new THREE.LineSegments(edges,
+                    new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 }));
+                cube.add(wireframe);
+
+                // Scale the cube to represent the fraction
+                cube.scale.set(1, fraction, 1);
+
+                return cube;
+            }
+
+            async animateSubtractionVisualization(result) {
+                this.updateStatus("Showing subtraction with ghost cubes...");
+
+                // Create some cubes and then subtract (make them glow)
+                const initialCount = Math.ceil(result) + 3;
+
+                for (let i = 0; i < initialCount; i++) {
+                    const cube = this.createCube(
+                        { x: i - initialCount / 2, y: 0, z: 0 },
+                        0x4a9eff
+                    );
+                    this.scene.add(cube);
+
+                    if (!skipAnimations) {
+                        await this.delay(150 / animationSpeed);
+                    }
+                }
+
+                this.fitCameraToScene();
+
+                if (!skipAnimations) {
+                    await this.delay(500 / animationSpeed);
+                }
+
+                // Remove some cubes with ghost effect
+                const cubesToRemove = initialCount - Math.round(result);
+                const allCubes = [];
+                this.scene.traverse((child) => {
+                    if (child.isMesh && child.geometry.type === 'BoxGeometry') {
+                        allCubes.push(child);
+                    }
+                });
+
+                for (let i = 0; i < cubesToRemove && i < allCubes.length; i++) {
+                    this.animateGhostCube(allCubes[allCubes.length - 1 - i]);
+
+                    if (!skipAnimations) {
+                        await this.delay(300 / animationSpeed);
+                    }
+                }
+            }
+
+            async animateFinalCompaction(result) {
+                this.updateStatus("Compacting to final result...");
+
+                if (!skipAnimations) {
+                    await this.delay(500 / animationSpeed);
+                }
+
+                this.clearScene();
+                await this.createEnhancedVisualization(result, null);
+            }
+
+            async createEnhancedVisualization(result, targetDimension = null, exactFactors = null) {
+                const n = Math.round(Math.abs(result));
+                this.currentNumber = n;
+                this.currentTargetDimension = targetDimension; // Store for status display
+
+                console.log(`createEnhancedVisualization: n=${n}, targetDimension=${targetDimension}, exactFactors=${exactFactors ? `[${exactFactors.join(',')}]` : 'null'}`);
+
+                // Get all possible arrangements
+                const arrangements = [];
+
+                // If we have exact factors from the original expression, prioritize them FIRST
+                if (exactFactors && exactFactors.length > 1) {
+                    console.log(`Using exact factors from expression: [${exactFactors.join(',')}] (${exactFactors.length}D)`);
+
+                    // Add the exact factors as the first arrangement
+                    arrangements.push({
+                        type: 'standard',
+                        factors: exactFactors,
+                        isExact: true // Mark as exact from expression
+                    });
+
+                    // Add all other factorizations for cycling (but not the exact one if it would duplicate)
+                    const allFactorizations = this.getAllFactorizations(n);
+                    const exactFactorsKey = exactFactors.slice().sort((a, b) => a - b).join(',');
+
+                    allFactorizations.forEach(factors => {
+                        const factorsKey = factors.slice().sort((a, b) => a - b).join(',');
+                        if (factorsKey !== exactFactorsKey) {
+                            arrangements.push({
+                                type: 'standard',
+                                factors: factors,
+                                isExact: false
+                            });
+                        }
+                    });
+                } else {
+                    // Original logic: Use target dimension filtering for non-exact expressions
+                    const factorizations = this.getAllFactorizations(n);
+
+                    // If we have a target dimension from the expression, prioritize that
+                    if (targetDimension !== null) {
+                        console.log(`Prioritizing target dimension: ${targetDimension}D`);
+
+                        // First, add factorizations that match the target dimension
+                        const targetFactorizations = factorizations.filter(factors => factors.length === targetDimension);
+                        const otherFactorizations = factorizations.filter(factors => factors.length !== targetDimension);
+
+                        if (targetFactorizations.length > 0) {
+                            console.log(`Found ${targetFactorizations.length} factorizations matching ${targetDimension}D`);
+                            // Add target dimension factorizations first
+                            targetFactorizations.forEach(factors => {
+                                arrangements.push({
+                                    type: 'standard',
+                                    factors: factors
+                                });
+                            });
+
+                            // Then add all other factorizations for cycling
+                            console.log(`Adding ${otherFactorizations.length} other factorizations for cycling`);
+                            otherFactorizations.forEach(factors => {
+                                arrangements.push({
+                                    type: 'standard',
+                                    factors: factors
+                                });
+                            });
+                        } else {
+                            console.log(`No factorizations found for ${targetDimension}D, using all factorizations`);
+                            // If no factorizations match the target dimension, use all
+                            factorizations.forEach(factors => {
+                                arrangements.push({
+                                    type: 'standard',
+                                    factors: factors
+                                });
+                            });
+                        }
+                    } else {
+                        // No target dimension specified, use all factorizations (original behavior)
+                        factorizations.forEach(factors => {
+                            arrangements.push({
+                                type: 'standard',
+                                factors: factors
+                            });
+                        });
+                    }
+                }
+
+                // Add special patterns AFTER standard arrangements
+                const specialPatterns = this.getSpecialNumberPatterns(n);
+                specialPatterns.forEach(pattern => {
+                    arrangements.push(pattern);
+                });
+
+                this.currentArrangements = arrangements;
+                this.currentArrangementIndex = 0;
+
+                if (arrangements.length > 0) {
+                    // Show the first arrangement (now prioritizes squares for perfect squares)
+                    const firstArrangement = arrangements[0];
+
+                    if (firstArrangement.type === 'standard') {
+                        // Pre-calculate expected structure size and adjust camera before drawing
+                        const estimatedSize = this.estimateStructureSize(firstArrangement.factors);
+                        this.prePositionCameraForSize(estimatedSize);
+
+                        this.create3DVisualization(firstArrangement.factors, result);
+                    } else if (firstArrangement.type === 'triangular') {
+                        this.createTriangularVisualization(firstArrangement.index);
+                    } else if (firstArrangement.type === 'pentagonal') {
+                        this.createPentagonalVisualization(firstArrangement.index);
+                    } else if (firstArrangement.type === 'hexagonal') {
+                        this.createHexagonalVisualization(firstArrangement.index);
+                    }
+
+                    this.fitCameraToScene();
+                    this.updateArrangementStatus();
+                } else {
+                    this.updateStatus(`Cannot create visualization for ${result}`);
+                }
+            }
+
+            createCube(position, color = 0x4a9eff) {
+                const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+                const material = new THREE.MeshLambertMaterial({ color: color });
+                const cube = new THREE.Mesh(geometry, material);
+
+                cube.position.set(position.x, position.y, position.z);
+
+                const edges = new THREE.EdgesGeometry(geometry);
+                const wireframe = new THREE.LineSegments(edges,
+                    new THREE.LineBasicMaterial({ color: 0xffffff }));
+                cube.add(wireframe);
+
+                return cube;
+            }
+
+            clearScene() {
+                const objectsToRemove = [];
+
+                // Collect all meshes and groups to remove
+                this.scene.traverse((child) => {
+                    if (child.isMesh || (child.isGroup && child.parent === this.scene)) {
+                        objectsToRemove.push(child);
+                    }
+                });
+
+                // Remove objects and dispose of resources
+                objectsToRemove.forEach((obj) => {
+                    if (obj.parent) {
+                        obj.parent.remove(obj);
+                    }
+
+                    // Dispose of geometry and materials recursively
+                    obj.traverse((child) => {
+                        if (child.isMesh) {
+                            if (child.geometry) child.geometry.dispose();
+                            if (child.material) {
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(material => material.dispose());
+                                } else {
+                                    child.material.dispose();
+                                }
+                            }
+                        }
+                    });
+                });
+
+                // Also clear any lights that aren't ambient or directional
+                const lightsToRemove = [];
+                this.scene.traverse((child) => {
+                    if (child.isLight && child.type !== 'AmbientLight' && child.type !== 'DirectionalLight') {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(light => this.scene.remove(light));
+            }
+
+            findBest3DFactorization(n) {
+                if (n <= 0) return null;
+                if (n === 1) return [1, 1, 1];
+
+                let bestFactors = null;
+                let bestScore = Infinity;
+
+                for (let x = 1; x <= Math.cbrt(n) + 1; x++) {
+                    if (n % x === 0) {
+                        const remaining = n / x;
+                        for (let y = x; y <= Math.sqrt(remaining) + 1; y++) {
+                            if (remaining % y === 0) {
+                                const z = remaining / y;
+
+                                const maxDim = Math.max(x, y, z);
+                                const minDim = Math.min(x, y, z);
+                                const score = maxDim - minDim;
+
+                                if (score < bestScore) {
+                                    bestScore = score;
+                                    bestFactors = [x, y, z].sort((a, b) => a - b);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return bestFactors;
+            }
+
+            cycleArrangement(direction) {
+                if (this.currentArrangements.length <= 1) return;
+
+                this.currentArrangementIndex = (this.currentArrangementIndex + direction + this.currentArrangements.length) % this.currentArrangements.length;
+
+                const arrangement = this.currentArrangements[this.currentArrangementIndex];
+                this.clearScene();
+
+                if (arrangement.type === 'standard') {
+                    this.create3DVisualization(arrangement.factors, this.currentNumber);
+                } else if (arrangement.type === 'triangular') {
+                    this.createTriangularVisualization(arrangement.index);
+                } else if (arrangement.type === 'pentagonal') {
+                    this.createPentagonalVisualization(arrangement.index);
+                } else if (arrangement.type === 'hexagonal') {
+                    this.createHexagonalVisualization(arrangement.index);
+                }
+
+                this.fitCameraToScene();
+                this.updateArrangementStatus();
+            }
+
+            updateArrangementStatus() {
+                const total = this.currentArrangements.length;
+                const current = this.currentArrangementIndex + 1;
+                const arrangement = this.currentArrangements[this.currentArrangementIndex];
+
+                let description = '';
+                if (arrangement.type === 'standard') {
+                    const factors = arrangement.factors;
+                    const dimensionality = factors.length;
+                    const dimensionName = dimensionality === 1 ? '1D' :
+                        dimensionality === 2 ? '2D' :
+                            dimensionality === 3 ? '3D' :
+                                `${dimensionality}D`;
+
+                    // Check if this is exact factors from the original expression
+                    let priorityFlag = '';
+                    if (arrangement.isExact) {
+                        priorityFlag = ' 🎯'; // Target emoji for exact factors from expression
+                    } else if (current === 1 && this.currentTargetDimension !== null && dimensionality === this.currentTargetDimension) {
+                        priorityFlag = ' ⭐'; // Star to indicate this is the dimension-prioritized arrangement
+                    }
+
+                    description = `${factors.join('×')} (${dimensionName})${priorityFlag}`;
+                } else {
+                    description = `${arrangement.type} pattern`;
+                }
+
+                const multiFlag = total > 1 ? " 🔄" : "";
+                this.updateStatus(`${description}${multiFlag} (${current}/${total}) - Hold Ctrl+scroll to cycle arrangements`);
+            }
+
+            createTriangularVisualization(index) {
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                // Create triangular pattern
+                for (let row = 0; row < index; row++) {
+                    for (let col = 0; col <= row; col++) {
+                        const x = col * (cubeSize + gap) - row * (cubeSize + gap) / 2;
+                        const z = -row * (cubeSize + gap) * 0.866; // √3/2 for triangular spacing
+
+                        const cube = this.createCube(
+                            { x: x, y: 0, z: z },
+                            0x00ff88 // Teal for triangular
+                        );
+                        this.scene.add(cube);
+                    }
+                }
+            }
+
+            createPentagonalVisualization(index) {
+                const gap = 0.1;
+                const cubeSize = 0.8;
+                let cubeCount = 0;
+                const targetCount = index * (3 * index - 1) / 2;
+
+                // Create pentagonal spiral pattern
+                const centerRadius = 1.5;
+                const angleIncrement = (2 * Math.PI) / 5; // Pentagon has 5 sides
+
+                for (let ring = 0; ring < index && cubeCount < targetCount; ring++) {
+                    const radius = centerRadius + ring * (cubeSize + gap) * 1.5;
+                    const pointsInRing = ring === 0 ? 1 : ring * 5;
+
+                    for (let point = 0; point < pointsInRing && cubeCount < targetCount; point++) {
+                        const angle = (point / pointsInRing) * 2 * Math.PI;
+                        const x = Math.cos(angle) * radius;
+                        const z = Math.sin(angle) * radius;
+
+                        const cube = this.createCube(
+                            { x: x, y: 0, z: z },
+                            0xff6600 // Orange for pentagonal
+                        );
+                        this.scene.add(cube);
+                        cubeCount++;
+                    }
+                }
+            }
+
+            createHexagonalVisualization(index) {
+                const gap = 0.1;
+                const cubeSize = 0.8;
+                let cubeCount = 0;
+                const targetCount = index * (2 * index - 1);
+
+                // Create hexagonal pattern
+                for (let ring = 0; ring < index && cubeCount < targetCount; ring++) {
+                    if (ring === 0) {
+                        // Center cube
+                        const cube = this.createCube({ x: 0, y: 0, z: 0 }, 0x6600ff); // Purple for hexagonal
+                        this.scene.add(cube);
+                        cubeCount++;
+                    } else {
+                        // Ring of cubes
+                        const radius = ring * (cubeSize + gap) * 1.2;
+                        const cubesInRing = 6 * ring;
+
+                        for (let i = 0; i < cubesInRing && cubeCount < targetCount; i++) {
+                            const angle = (i / cubesInRing) * 2 * Math.PI;
+                            const x = Math.cos(angle) * radius;
+                            const z = Math.sin(angle) * radius;
+
+                            const cube = this.createCube(
+                                { x: x, y: 0, z: z },
+                                0x6600ff // Purple for hexagonal
+                            );
+                            this.scene.add(cube);
+                            cubeCount++;
+                        }
+                    }
+                }
+            }
+
+            async animateSimpleAddition(step) {
+                const { addends, finalResult } = step;
+                this.updateStatus(`Animating simple addition: ${addends.join(' + ')} = ${finalResult}`);
+
+                const colors = [0xff0000, 0x0000ff, 0x00ff00, 0xff8800, 0xff00ff, 0x00ffff]; // Red, Blue, Green, Orange, Magenta, Cyan
+                let currentX = 0;
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                // Draw each addend group in different colors
+                for (let groupIndex = 0; groupIndex < addends.length; groupIndex++) {
+                    const count = Math.round(addends[groupIndex]);
+                    const color = colors[groupIndex % colors.length];
+
+                    this.updateStatus(`Adding ${count} ${groupIndex === 0 ? 'red' : groupIndex === 1 ? 'blue' : 'colored'} cubes...`);
+
+                    // Create cubes for this addend
+                    for (let i = 0; i < count; i++) {
+                        const cube = this.createCube(
+                            { x: currentX, y: 0, z: 0 },
+                            color
+                        );
+                        this.scene.add(cube);
+                        currentX += cubeSize + gap;
+
+                        if (!skipAnimations) {
+                            await this.delay(300 / animationSpeed);
+                        }
+                    }
+
+                    this.fitCameraToScene();
+
+                    if (!skipAnimations && groupIndex < addends.length - 1) {
+                        await this.delay(800 / animationSpeed);
+                    }
+                }
+
+                this.updateStatus(`Addition complete: ${addends.join(' + ')} = ${finalResult}`);
+            }
+
+            async animateSimpleSubtraction(step) {
+                const { terms, finalResult } = step;
+                this.updateStatus(`Animating subtraction...`);
+
+                // Find the first positive term (minuend)
+                const minuend = terms.find(t => t.sign > 0);
+                const subtrahends = terms.filter(t => t.sign < 0);
+
+                if (!minuend) return;
+
+                // Create initial cubes for the minuend
+                this.updateStatus(`Starting with ${minuend.value} blue cubes...`);
+                const cubes = [];
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                for (let i = 0; i < minuend.value; i++) {
+                    const cube = this.createCube(
+                        { x: i * (cubeSize + gap), y: 0, z: 0 },
+                        0x0000ff // Blue for minuend
+                    );
+                    this.scene.add(cube);
+                    cubes.push(cube);
+
+                    if (!skipAnimations) {
+                        await this.delay(200 / animationSpeed);
+                    }
+                }
+
+                this.fitCameraToScene();
+
+                if (!skipAnimations) {
+                    await this.delay(1000 / animationSpeed);
+                }
+
+                // Remove cubes for each subtrahend
+                for (let termIndex = 0; termIndex < subtrahends.length; termIndex++) {
+                    const subtrahend = subtrahends[termIndex];
+                    const toRemove = Math.round(Math.abs(subtrahend.value));
+
+                    this.updateStatus(`Subtracting ${toRemove} cubes...`);
+
+                    for (let i = 0; i < toRemove && cubes.length > 0; i++) {
+                        const cubeToRemove = cubes.pop();
+                        if (cubeToRemove) {
+                            this.animateGhostCube(cubeToRemove);
+
+                            if (!skipAnimations) {
+                                await this.delay(400 / animationSpeed);
+                            }
+                        }
+                    }
+                }
+
+                this.updateStatus(`Subtraction complete: result = ${finalResult}`);
+                this.fitCameraToScene();
+            }
+
+            async animateAdditionVisualization(step) {
+                const { mainValue, additionalValue, finalResult } = step;
+
+                this.updateStatus(`Adding ${additionalValue} unit cubes to the main structure...`);
+
+                // Get all current cubes in the scene (the main exponential structure)
+                const currentCubes = [];
+                this.scene.traverse((child) => {
+                    if (child.isMesh && child.geometry && child.geometry.type === 'BoxGeometry') {
+                        currentCubes.push(child);
+                    }
+                });
+
+                // Add individual unit cubes for the additional value
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                // Position additional cubes to the side of the main structure
+                let maxX = 0;
+                currentCubes.forEach(cube => {
+                    maxX = Math.max(maxX, cube.position.x);
+                });
+
+                const startX = maxX + cubeSize + gap * 2; // Leave some space
+
+                for (let i = 0; i < additionalValue; i++) {
+                    const additionalCube = this.createCube({
+                        x: startX + i * (cubeSize + gap),
+                        y: 0,
+                        z: 0
+                    }, 0x00ff00); // Green for additional units
+
+                    this.scene.add(additionalCube);
+                    this.updateStatus(`Adding unit ${i + 1} of ${additionalValue}...`);
+
+                    if (!skipAnimations) {
+                        await this.delay(500 / animationSpeed);
+                    }
+                }
+
+                this.fitCameraToScene();
+                this.updateStatus(`Addition complete: ${mainValue} + ${additionalValue} = ${finalResult}`);
+
+                if (!skipAnimations) {
+                    await this.delay(1000 / animationSpeed);
+                }
+            }
+
+            findBest3DFactorization(n) {
+                if (n <= 0) return null;
+                if (n === 1) return [1, 1, 1];
+
+                let bestFactors = null;
+                let bestScore = Infinity;
+
+                for (let x = 1; x <= Math.cbrt(n) + 1; x++) {
+                    if (n % x === 0) {
+                        const remaining = n / x;
+                        for (let y = x; y <= Math.sqrt(remaining) + 1; y++) {
+                            if (remaining % y === 0) {
+                                const z = remaining / y;
+
+                                const maxDim = Math.max(x, y, z);
+                                const minDim = Math.min(x, y, z);
+                                const score = maxDim - minDim;
+
+                                if (score < bestScore) {
+                                    bestScore = score;
+                                    bestFactors = [x, y, z].sort((a, b) => a - b);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return bestFactors;
+            }
+
+            create3DVisualization(factors, value) {
+                console.log(`create3DVisualization called with factors: [${factors.join(',')}] (${factors.length}D)`);
+                // Handle different dimensional factorizations
+                // 1D: [n] -> linear arrangement
+                // 2D: [x, y] -> flat rectangle 
+                // 3D: [x, y, z] -> 3D block
+                // 4D+: [x, y, z, ...] -> 3D base with high-dimensional copies
+
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                if (factors.length === 1) {
+                    console.log("Creating 1D visualization");
+                    // 1D: Linear arrangement
+                    this.create1DVisualization(factors[0], gap, cubeSize);
+                } else if (factors.length === 2) {
+                    console.log("Creating 2D visualization");
+                    // 2D: Flat rectangle
+                    this.create2DVisualization(factors[0], factors[1], gap, cubeSize);
+                } else {
+                    console.log(`Creating high-dimensional visualization (${factors.length}D)`);
+                    // 3D and higher: Use 3D base with copies for higher dimensions
+                    this.createHighDimensionalVisualization(factors, gap, cubeSize);
+                }
+            }
+
+            create1DVisualization(count, gap, cubeSize) {
+                const offsetX = -(count - 1) * (cubeSize + gap) / 2;
+
+                for (let x = 0; x < count; x++) {
+                    const cube = this.createCube({
+                        x: offsetX + x * (cubeSize + gap),
+                        y: 0,
+                        z: 0
+                    }, 0xff0000); // Red for 1D
+                    this.scene.add(cube);
+                }
+            }
+
+            create2DVisualization(dimX, dimY, gap, cubeSize) {
+                const offsetX = -(dimX - 1) * (cubeSize + gap) / 2;
+                const offsetY = -(dimY - 1) * (cubeSize + gap) / 2;
+
+                for (let x = 0; x < dimX; x++) {
+                    for (let y = 0; y < dimY; y++) {
+                        const isCheckerboard = (x + y) % 2 === 0;
+                        const color = isCheckerboard ? 0x00ff00 : 0xff8800; // Green and orange pattern
+
+                        const cube = this.createCube({
+                            x: offsetX + x * (cubeSize + gap),
+                            y: offsetY + y * (cubeSize + gap),
+                            z: 0
+                        }, color);
+                        this.scene.add(cube);
+                    }
+                }
+            }
+
+            createHighDimensionalVisualization(factors, gap, cubeSize) {
+                console.log(`createHighDimensionalVisualization: factors=[${factors.join(',')}]`);
+                // Use first 3 dimensions for the base 3D structure
+                const dimX = factors[0];
+                const dimY = factors.length > 1 ? factors[1] : 1;
+                const dimZ = factors.length > 2 ? factors[2] : 1;
+
+                console.log(`Base 3D structure: ${dimX}x${dimY}x${dimZ} = ${dimX * dimY * dimZ} cubes`);
+
+                // Calculate total number of base 3D structures needed
+                let totalStructures = 1;
+                for (let i = 3; i < factors.length; i++) {
+                    totalStructures *= factors[i];
+                }
+
+                console.log(`Total structures needed: ${totalStructures}`);
+                console.log(`Higher dimensional factors: [${factors.slice(3).join(',')}]`);
+                console.log(`Expected total cubes: ${dimX * dimY * dimZ * totalStructures}`);
+
+                // Create all the 3D base structures
+                const structures = [];
+                for (let structureIndex = 0; structureIndex < totalStructures; structureIndex++) {
+                    console.log(`Creating structure ${structureIndex + 1}/${totalStructures}`);
+                    const base3DGroup = this.createBase3DStructure(dimX, dimY, dimZ, gap, cubeSize);
+
+                    // Calculate position for this structure based on higher dimensions
+                    const position = this.calculateHighDimensionalPosition(structureIndex, factors.slice(3), gap, cubeSize, dimX, dimY, dimZ);
+                    console.log(`Position for structure ${structureIndex}: x=${position.x.toFixed(2)}, y=${position.y.toFixed(2)}, z=${position.z.toFixed(2)}`);
+                    base3DGroup.position.set(position.x, position.y, position.z);
+
+                    // Apply different colors for different structures
+                    this.applyStructureColors(base3DGroup, structureIndex);
+
+                    this.scene.add(base3DGroup);
+                    structures.push(base3DGroup);
+                }
+
+                console.log(`Added ${structures.length} structures to scene`);
+
+                // Count total cubes for verification
+                let totalCubes = 0;
+                this.scene.traverse((object) => {
+                    if (object.isMesh && object.geometry && object.geometry.type === 'BoxGeometry') {
+                        totalCubes++;
+                    }
+                });
+                console.log(`Total cubes in scene: ${totalCubes}`);
+            }
+
+            calculateHighDimensionalPosition(structureIndex, higherDimFactors, gap, cubeSize, dimX, dimY, dimZ) {
+                if (higherDimFactors.length === 0) {
+                    return { x: 0, y: 0, z: 0 };
+                }
+
+                // Calculate spacing between structures - make it proportional to structure size
+                const baseWidth = dimX * (cubeSize + gap);
+                const baseHeight = dimY * (cubeSize + gap);
+                const baseDepth = dimZ * (cubeSize + gap);
+
+                // Use more generous spacing for high dimensions to avoid overlap
+                const spacingX = baseWidth * 2.0; // Increased from 1.5 to 2.0
+                const spacingY = baseHeight * 2.0;
+                const spacingZ = baseDepth * 2.0;
+
+                // Improved algorithm: arrange structures in a more optimal 3D grid
+                // For 7D+, we want to minimize the overall footprint while avoiding overlaps
+
+                let pos = { x: 0, y: 0, z: 0 };
+                let tempIndex = structureIndex;
+
+                // Calculate optimal grid dimensions for arranging all structures
+                let totalStructures = 1;
+                higherDimFactors.forEach(factor => totalStructures *= factor);
+
+                // Create a roughly cubic arrangement when possible
+                const gridX = higherDimFactors[0] || 1;
+                const gridY = higherDimFactors[1] || 1;
+                const gridZ = higherDimFactors[2] || 1;
+
+                // For higher dimensions, arrange remaining structures in a second layer
+                let layerStructures = gridX * gridY * gridZ;
+
+                if (higherDimFactors.length > 3) {
+                    // Calculate which layer this structure belongs to
+                    const layer = Math.floor(structureIndex / layerStructures);
+                    const indexInLayer = structureIndex % layerStructures;
+
+                    // Position within the current layer
+                    const z_layer = Math.floor(indexInLayer / (gridX * gridY));
+                    const y_layer = Math.floor((indexInLayer % (gridX * gridY)) / gridX);
+                    const x_layer = indexInLayer % gridX;
+
+                    pos.x = x_layer * spacingX;
+                    pos.y = y_layer * spacingY;
+                    pos.z = z_layer * spacingZ;
+
+                    // Offset each higher dimensional layer
+                    let layerOffset = 0;
+                    for (let i = 3; i < higherDimFactors.length; i++) {
+                        const layerCoord = Math.floor(layer / Math.pow(higherDimFactors[i], i - 3)) % higherDimFactors[i];
+                        const axisIndex = (i - 3) % 3;
+
+                        if (axisIndex === 0) {
+                            pos.x += layerCoord * spacingX * gridX * 1.2;
+                        } else if (axisIndex === 1) {
+                            pos.y += layerCoord * spacingY * gridY * 1.2;
+                        } else {
+                            pos.z += layerCoord * spacingZ * gridZ * 1.2;
+                        }
+                    }
+                } else {
+                    // Simple 3D grid for 4D-6D
+                    const z_pos = Math.floor(structureIndex / (gridX * gridY));
+                    const y_pos = Math.floor((structureIndex % (gridX * gridY)) / gridX);
+                    const x_pos = structureIndex % gridX;
+
+                    pos.x = x_pos * spacingX;
+                    pos.y = y_pos * spacingY;
+                    pos.z = z_pos * spacingZ;
+                }
+
+                // Center the entire arrangement
+                const totalGridX = gridX * spacingX;
+                const totalGridY = gridY * spacingY;
+                const totalGridZ = gridZ * spacingZ;
+
+                pos.x -= totalGridX / 2;
+                pos.y -= totalGridY / 2;
+                pos.z -= totalGridZ / 2;
+
+                return pos;
+            }
+
+            applyStructureColors(structure, structureIndex) {
+                // Apply different color schemes for different structures
+                const colorSchemes = [
+                    { primary: 0x42ff8c, secondary: 0xff8c42 }, // Green-Orange
+                    { primary: 0xff6b6b, secondary: 0x4a9eff }, // Red-Blue  
+                    { primary: 0x9775fa, secondary: 0xffd43b }, // Purple-Yellow
+                    { primary: 0x51cf66, secondary: 0xff8cc8 }, // Lime-Pink
+                ];
+
+                const scheme = colorSchemes[structureIndex % colorSchemes.length];
+
+                structure.traverse((child) => {
+                    if (child.isMesh && child.geometry && child.geometry.type === 'BoxGeometry') {
+                        // Apply checkerboard pattern within structure
+                        const pos = child.position;
+                        const sum = Math.round(pos.x / 0.9) + Math.round(pos.y / 0.9) + Math.round(pos.z / 0.9);
+                        const useSecondary = (sum % 2 === 1);
+                        const color = useSecondary ? scheme.secondary : scheme.primary;
+
+                        child.material = new THREE.MeshLambertMaterial({ color: color });
+                    }
+                });
+            }
+
+            createBase3DStructure(dimX, dimY, dimZ, gap, cubeSize) {
+                const group = new THREE.Group();
+
+                const offsetX = -(dimX - 1) * (cubeSize + gap) / 2;
+                const offsetY = -(dimY - 1) * (cubeSize + gap) / 2;
+                const offsetZ = -(dimZ - 1) * (cubeSize + gap) / 2;
+
+                for (let x = 0; x < dimX; x++) {
+                    for (let y = 0; y < dimY; y++) {
+                        for (let z = 0; z < dimZ; z++) {
+                            const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                            const material = new THREE.MeshLambertMaterial({ color: 0x4a9eff }); // Default blue
+                            const cube = new THREE.Mesh(geometry, material);
+
+                            cube.position.set(
+                                offsetX + x * (cubeSize + gap),
+                                offsetY + y * (cubeSize + gap),
+                                offsetZ + z * (cubeSize + gap)
+                            );
+
+                            // Add wireframe
+                            const edges = new THREE.EdgesGeometry(geometry);
+                            const wireframe = new THREE.LineSegments(edges,
+                                new THREE.LineBasicMaterial({ color: 0xffffff }));
+                            cube.add(wireframe);
+
+                            group.add(cube);
+                        }
+                    }
+                }
+
+                return group;
+            }
+
+            fitCameraToScene() {
+                const box = new THREE.Box3();
+
+                this.scene.traverse((object) => {
+                    if (object.isMesh) {
+                        box.expandByObject(object);
+                    }
+                });
+
+                if (box.isEmpty()) return;
+
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                const maxDim = Math.max(size.x, size.y, size.z);
+
+                // Improved camera positioning for large structures
+                const fov = this.camera.fov * (Math.PI / 180);
+                const distance = Math.abs(maxDim / Math.tan(fov / 2));
+
+                // Use more conservative multiplier to ensure everything fits
+                const idealDistance = Math.max(distance * 1.4, maxDim * 2.0);
+
+                // Position camera at a good angle to see the structure
+                const cameraOffset = idealDistance * 0.8;
+                this.camera.position.set(
+                    center.x + cameraOffset,
+                    center.y + cameraOffset,
+                    center.z + cameraOffset
+                );
+
+                this.controls.target.copy(center);
+                this.controls.update();
+
+                // Set reasonable min/max distances
+                this.controls.minDistance = Math.max(maxDim * 0.1, 0.5);
+                this.controls.maxDistance = maxDim * 10;
+
+                console.log(`Camera positioned: distance=${idealDistance.toFixed(2)}, maxDim=${maxDim.toFixed(2)}, center=(${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+            }
+
+            estimateStructureSize(factors) {
+                const gap = 0.1;
+                const cubeSize = 0.8;
+
+                if (factors.length <= 3) {
+                    // Simple 3D case
+                    const dimX = factors[0] || 1;
+                    const dimY = factors[1] || 1;
+                    const dimZ = factors[2] || 1;
+
+                    return {
+                        x: dimX * (cubeSize + gap),
+                        y: dimY * (cubeSize + gap),
+                        z: dimZ * (cubeSize + gap)
+                    };
+                } else {
+                    // High-dimensional case
+                    const dimX = factors[0];
+                    const dimY = factors.length > 1 ? factors[1] : 1;
+                    const dimZ = factors.length > 2 ? factors[2] : 1;
+
+                    const baseWidth = dimX * (cubeSize + gap);
+                    const baseHeight = dimY * (cubeSize + gap);
+                    const baseDepth = dimZ * (cubeSize + gap);
+
+                    // Calculate how many structures we'll have
+                    let totalStructures = 1;
+                    for (let i = 3; i < factors.length; i++) {
+                        totalStructures *= factors[i];
+                    }
+
+                    // Estimate spacing and total arrangement size
+                    const spacingX = baseWidth * 1.5;
+                    const spacingY = baseHeight * 1.5;
+                    const spacingZ = baseDepth * 1.5;
+
+                    // Rough estimate of how structures will be arranged
+                    const structuresPerAxis = Math.ceil(Math.pow(totalStructures, 1 / 3));
+
+                    return {
+                        x: structuresPerAxis * spacingX,
+                        y: structuresPerAxis * spacingY,
+                        z: structuresPerAxis * spacingZ
+                    };
+                }
+            }
+
+            prePositionCameraForSize(estimatedSize) {
+                const maxDim = Math.max(estimatedSize.x, estimatedSize.y, estimatedSize.z);
+                const fov = this.camera.fov * (Math.PI / 180);
+                const distance = Math.abs(maxDim / Math.tan(fov / 2)) * 1.2; // Increased multiplier for better initial view
+
+                const idealDistance = Math.max(distance, maxDim * 2);
+
+                this.camera.position.set(
+                    idealDistance,
+                    idealDistance,
+                    idealDistance
+                );
+
+                this.camera.lookAt(0, 0, 0);
+                this.controls.target.set(0, 0, 0);
+                this.controls.update();
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            // Get special number pattern detection method
+            getSpecialNumberPatterns(n) {
+                return this.parser.getSpecialNumberPatterns(n);
+            }
+
+            // Get all factorizations method
+            getAllFactorizations(n) {
+                return this.parser.getAllFactorizations(n);
+            }
+        }
+
+        // Global functions
+        function setExpression(expr) {
+            document.getElementById('input').value = expr;
+            visualizer.processInput(expr);
+        }
+
+        function resetCameraView() {
+            visualizer.fitCameraToScene();
+        }
+
+        function toggleLightMode() {
+            document.body.classList.toggle('light-mode');
+            visualizer.updateRendererForTheme();
+            visualizer.updateLighting();
+
+            const button = event.target;
+            button.textContent = document.body.classList.contains('light-mode') ?
+                '🌙 Dark Mode' : '🌞 Light Mode';
+        }
+
+        function setAnimationSpeed(speed) {
+            animationSpeed = speed;
+            document.querySelectorAll('.speed-control').forEach(btn => {
+                btn.style.background = 'var(--button-bg)';
+            });
+            event.target.style.background = 'var(--button-hover)';
+        }
+
+        function skipAnimation() {
+            skipAnimations = !skipAnimations;
+            event.target.textContent = skipAnimations ? 'Enable Animation' : 'Skip Animation';
+        }
+
+        // Initialize the visualizer
+        console.log('Initializing Advanced Math Visualizer...');
+        console.log('Three.js version:', THREE.REVISION);
+
+        const visualizer = new AdvancedVisualizer();
+        console.log('Visualizer created:', visualizer);
+
+        // Add a test cube to verify basic rendering
+        const testGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const testCube = new THREE.Mesh(testGeometry, testMaterial);
+        testCube.position.set(0, 0, 0);
+        visualizer.scene.add(testCube);
+        console.log('Test cube added:', testCube);
+
+        // Auto-process a default expression
+        const defaultExpr = '2+3=';
+        document.getElementById('input').value = defaultExpr;
+        setTimeout(() => {
+            console.log('Processing default expression:', defaultExpr);
+            visualizer.processInput(defaultExpr);
+        }, 100);
+    </script>
+</body>
+
+</html>
